@@ -10,7 +10,8 @@ class TestFunction(Protocol):
     lo: float
     hi: float
     zmax: Optional[float]
-    minima: List[Tuple[float, float]]
+    minima: List[Tuple[float, ...]]
+    dim: int
 
 
 @dataclass
@@ -22,4 +23,5 @@ class BaseFunction:
     lo: float = -6.0
     hi: float = 6.0
     zmax: Optional[float] = None
-    minima: List[Tuple[float, float]] = field(default_factory=list)
+    minima: List[Tuple[float, ...]] = field(default_factory=list)
+    dim: int = 2

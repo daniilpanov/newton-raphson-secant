@@ -15,14 +15,20 @@ DEFAULT_SAVE_DIR = Path('/storage/emulated/0/Download/mathcad-nf-sect')
 
 def parse_start(value: str):
     parts = value.split(',')
-    if len(parts) != 2:
-        raise argparse.ArgumentTypeError(
-            f"'--start' must be 'x,y', got {value!r}")
-    try:
-        return (float(parts[0]), float(parts[1]))
-    except ValueError:
-        raise argparse.ArgumentTypeError(
-            f"'--start' must be two numbers, got {value!r}")
+    if len(parts) == 1:
+        try:
+            return (float(parts[0]),)
+        except ValueError:
+            raise argparse.ArgumentTypeError(
+                f"'--start' must be a number or 'x,y', got {value!r}")
+    if len(parts) == 2:
+        try:
+            return (float(parts[0]), float(parts[1]))
+        except ValueError:
+            raise argparse.ArgumentTypeError(
+                f"'--start' must be two numbers, got {value!r}")
+    raise argparse.ArgumentTypeError(
+        f"'--start' must be 'x' or 'x,y', got {value!r}")
 
 
 def build_parser():
@@ -30,13 +36,13 @@ def build_parser():
         prog='main.py',
         description='Newton-Raphson + secant on test functions')
     p.add_argument('--function', required=True,
-                   choices=['quadratic', 'himmelblau', 'rosenbrock'],
+                   choices=['quadratic', 'himmelblau', 'rosenbrock', 'double_well'],
                    help='test function (from tests/)')
     p.add_argument('--method', default='modified',
                    choices=['simple', 'modified'],
                    help='optimization implementation')
     p.add_argument('--viz', default='photo',
-                   choices=['photo', 'interactive'],
+                   choices=['photo', 'interactive', 'oned'],
                    help='visualizer implementation')
     p.add_argument('--save-dir', default=None,
                    help='photo save dir; default from .env (VIZ_SAVE_DIR)')
@@ -64,19 +70,23 @@ def print_trajectory(X, func, label=''):
     print(f"\n{'='*70}")
     print(f"  Trajectory: {label}")
     print(f"{'='*70}")
-    print(f"{'k':>3s}  {'x':>20s}  {'y':>20s}  {'f(x,y)':>12s}  {'|grad|':>12s}")
+    n = X.shape[1] if X.ndim == 2 else 1
+    cols = '  '.join(f"{'x%d' % (j + 1):>20s}" for j in range(n))
+    print(f"{'k':>3s}  {cols}  {'f(x)':>12s}  {'|grad|':>12s}")
     print(f"{'-'*70}")
     for k in range(len(X)):
-        px, py = X[k]
-        fv = float(func.f(px, py))
-        gv = float(np.linalg.norm(func.grad(X[k])))
-        print(f"{k:3d}  {px:20.10f}  {py:20.10f}  {fv:12.6e}  {gv:12.6e}")
+        xv = X[k]
+        fv = float(func.f(xv))
+        gv = float(np.linalg.norm(func.grad(xv)))
+        vals = '  '.join(f"{vv:20.10f}" for vv in np.asarray(xv, float).ravel())
+        print(f"{k:3d}  {vals}  {fv:12.6e}  {gv:12.6e}")
     print(f"{'-'*70}")
     print(f"  Total iterations: {len(X)-1}")
 
 
 def closest_minimum(xf, minima):
-    dists = [np.hypot(xf[0] - m[0], xf[1] - m[1]) for m in minima]
+    xf = np.asarray(xf, float).ravel()
+    dists = [np.linalg.norm(xf - np.asarray(m, float)) for m in minima]
     idx = int(np.argmin(dists))
     return idx, minima[idx], dists[idx]
 
@@ -186,7 +196,7 @@ def main():
     if args.trace:
         if args.random:
             rng = np.random.default_rng(args.seed)
-            starts = rng.uniform(func.lo, func.hi, size=(args.points, 2))
+            starts = rng.uniform(func.lo, func.hi, size=(args.points, func.dim))
         else:
             starts = [np.asarray(args.start, float)]
         multi = len(starts) > 1
@@ -201,29 +211,32 @@ def main():
         return
 
     save_dir = args.save_dir or os.getenv('VIZ_SAVE_DIR') or str(DEFAULT_SAVE_DIR)
+    if args.viz == 'photo' and func.dim == 1:
+        args.viz = 'oned'
     visualizer = get_visualizer(args.viz, save_dir=save_dir)
 
     if args.random:
         rng = np.random.default_rng(args.seed)
-        starts = rng.uniform(func.lo, func.hi, size=(args.points, 2))
+        starts = rng.uniform(func.lo, func.hi, size=(args.points, func.dim))
     else:
         starts = [np.asarray(args.start, float)]
 
     trajectories = []
-    print(f"\nFunction: {func.name} | method: {args.method} | "
+    print(f"\nFunction: {func.name} ({func.dim}D) | method: {args.method} | "
           f"{'random (%d points)' % args.points if args.random else 'single start'}")
     for i, x0 in enumerate(starts):
         X = method.nf(func.f, func.grad, func.hess, x0, m=1000 if func.name == 'rosenbrock' else 500)
         trajectories.append(X)
         xf = X[-1]
-        label = f"{func.name} from ({x0[0]:.3f}, {x0[1]:.3f})"
+        x0f = np.asarray(x0, float).ravel()
+        label = f"{func.name} from ({', '.join(f'{v:.3f}' for v in x0f)})"
         print_trajectory(X, func, label) if not args.random else None
+        xf_str = '(' + ', '.join(f'{v:.6f}' for v in np.asarray(xf, float).ravel()) + ')'
         if func.minima:
             idx, cmin, dist = closest_minimum(xf, func.minima)
-            print(f"  Final: ({xf[0]:.6f}, {xf[1]:.6f}), "
-                  f"closest min#{idx} dist={dist:.2e}, iters={len(X)-1}")
+            print(f"  Final: {xf_str}, closest min#{idx} dist={dist:.2e}, iters={len(X)-1}")
         else:
-            print(f"  Final: ({xf[0]:.6f}, {xf[1]:.6f}), iters={len(X)-1}")
+            print(f"  Final: {xf_str}, iters={len(X)-1}")
 
     tag = 'random' if args.random else 'single'
     filename = f"{func.name}_{args.method}_{tag}"
