@@ -23,7 +23,7 @@ def parse_start(value: str):
                 f"'--start' must be a number or 'x,y', got {value!r}")
     if len(parts) == 2:
         try:
-            return (float(parts[0]), float(parts[1]))
+            return float(parts[0]), float(parts[1])
         except ValueError:
             raise argparse.ArgumentTypeError(
                 f"'--start' must be two numbers, got {value!r}")
@@ -38,9 +38,6 @@ def build_parser():
     p.add_argument('--function', required=True,
                    choices=['quadratic', 'himmelblau', 'rosenbrock', 'double_well'],
                    help='test function (from tests/)')
-    p.add_argument('--method', default='modified',
-                   choices=['modified'],
-                   help='optimization implementation')
     p.add_argument('--viz', default='photo',
                    choices=['photo', 'interactive', 'oned'],
                    help='visualizer implementation')
@@ -113,17 +110,13 @@ def _fmt_mat(m):
     return '[' + ', '.join(rows) + ']'
 
 
-def format_trace(trace, func_name, method_name):
-    if method_name == 'modified':
-        meth = 'модифицированный Ньютон (защиты + линейный поиск)'
-    else:
-        meth = 'канонический Ньютон + секущие'
+def format_trace(trace, func_name):
     lines = []
     for rec in trace:
         kind = rec['kind']
         if kind == 'start':
             lines.append('=' * 78)
-            lines.append(f"Функция: {func_name}  |  метод: {meth}")
+            lines.append(f"Функция: {func_name}")
             lines.append(f"x0 = {_fmt_vec(rec['x'])}  |  eps1 = {_fmt(rec['eps1'])}  |  "
                          f"eps2 = {_fmt(rec['eps2'])}  |  m = {rec['m']}")
             lines.append('=' * 78)
@@ -207,7 +200,7 @@ def main():
             trace = []
             method.nf(func.f, func.grad, func.hess, x0,
                       m=1000 if func.name == 'rosenbrock' else 500, trace=trace)
-            print(format_trace(trace, func.name, args.method))
+            print(format_trace(trace, func.name))
         return
 
     save_dir = args.save_dir or os.getenv('VIZ_SAVE_DIR') or str(DEFAULT_SAVE_DIR)
@@ -222,7 +215,7 @@ def main():
         starts = [np.asarray(args.start, float)]
 
     trajectories = []
-    print(f"\nFunction: {func.name} ({func.dim}D) | method: {args.method} | "
+    print(f"\nFunction: {func.name} ({func.dim}D) | "
           f"{'random (%d points)' % args.points if args.random else 'single start'}")
     for i, x0 in enumerate(starts):
         X = method.nf(func.f, func.grad, func.hess, x0, m=1000 if func.name == 'rosenbrock' else 500)
@@ -239,9 +232,9 @@ def main():
             print(f"  Final: {xf_str}, iters={len(X)-1}")
 
     tag = 'random' if args.random else 'single'
-    filename = f"{func.name}_{args.method}_{tag}"
+    filename = f"{func.name}_{tag}"
     visualizer.view(func, trajectories,
-                    title=f"{func.name} ({args.method}) - "
+                    title=f"{func.name} - "
                           f"{'%d random starts' % args.points if args.random else 'one start'}",
                     filename=filename)
     print(f"\nDone. Files saved to {save_dir}")

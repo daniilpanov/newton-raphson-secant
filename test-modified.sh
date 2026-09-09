@@ -30,7 +30,7 @@ SAVE_DIR="${SAVE_DIR:-$DEFAULT_DIR}"
 echo "==> [1/4] Himmelblau (modified), 4 fixed starts, photos -> $SAVE_DIR"
 for pt in "0,0" "-1,-2" "-1,2" "0.5,-0.5"; do
     sub="himmelblau_$(echo "$pt" | tr ',-' '__')"
-    python main.py --function himmelblau --method modified \
+    python main.py --function himmelblau \
         --start="$pt" --viz photo >/dev/null
     # main.py saves all single starts under one name; keep each run's photo
     mkdir -p "$SAVE_DIR/$sub"
@@ -38,12 +38,12 @@ for pt in "0,0" "-1,-2" "-1,2" "0.5,-0.5"; do
 done
 
 echo "==> [2/4] Rosenbrock (modified), 4 random starts (seed $SEED_ROS)"
-python main.py --function rosenbrock --method modified \
+python main.py --function rosenbrock \
     --random --points 4 --seed "$SEED_ROS" \
     --viz photo >/dev/null
 
 echo "==> [3/4] Quadratic (modified), 2 random starts (seed $SEED_QUAD)"
-python main.py --function quadratic --method modified \
+python main.py --function quadratic \
     --random --points 2 --seed "$SEED_QUAD" \
     --viz photo >/dev/null
 
@@ -53,11 +53,10 @@ import sys
 
 import numpy as np
 
-from algorithms.modified import ModifiedNewton
+from algorithms import nf
 from tests import get_function
 
 seed_ros, seed_quad = int(sys.argv[1]), int(sys.argv[2])
-method = ModifiedNewton()
 failed = False
 
 
@@ -74,7 +73,7 @@ def near_min(func, xf, tol):
 
 h = get_function('himmelblau')
 for pt in [(0, 0), (-1, -2), (-1, 2), (0.5, -0.5)]:
-    X = method.nf(h.f, h.grad, h.hess, np.asarray(pt, float))
+    X = nf(h.f, h.grad, h.hess, np.asarray(pt, float))
     xf = X[-1]
     it = len(X) - 1
     ok = (np.linalg.norm(h.grad(xf)) < 1e-5
@@ -86,7 +85,7 @@ for pt in [(0, 0), (-1, -2), (-1, 2), (0.5, -0.5)]:
 r = get_function('rosenbrock')
 rpts = np.random.default_rng(seed_ros).uniform(r.lo, r.hi, size=(4, 2))
 for pt in rpts:
-    X = method.nf(r.f, r.grad, r.hess, np.asarray(pt, float), m=1000)
+    X = nf(r.f, r.grad, r.hess, np.asarray(pt, float), m=1000)
     xf = X[-1]
     it = len(X) - 1
     ok = (np.linalg.norm(r.grad(xf)) < 1e-5
@@ -98,7 +97,7 @@ for pt in rpts:
 q = get_function('quadratic')
 qpts = np.random.default_rng(seed_quad).uniform(q.lo, q.hi, size=(2, 2))
 for pt in qpts:
-    X = method.nf(q.f, q.grad, q.hess, np.asarray(pt, float))
+    X = nf(q.f, q.grad, q.hess, np.asarray(pt, float))
     xf = X[-1]
     it = len(X) - 1
     ok = (it == 1 and near_min(q, xf, 1e-6))  # quadratic must converge in 1 step
