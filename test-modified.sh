@@ -54,7 +54,7 @@ import sys
 import numpy as np
 
 from algorithms import nf
-from tests import get_function
+from functions import get_function
 
 seed_ros, seed_quad = int(sys.argv[1]), int(sys.argv[2])
 failed = False

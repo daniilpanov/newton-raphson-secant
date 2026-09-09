@@ -7,7 +7,7 @@ import numpy as np
 from dotenv import load_dotenv
 
 from algorithms import nf
-from tests import get_function
+from functions import get_function
 from visualizer import get_visualizer
 
 DEFAULT_SAVE_DIR = Path('/storage/emulated/0/Download/mathcad-nf-sect')
@@ -37,7 +37,7 @@ def build_parser():
         description='Newton-Raphson + secant on test functions')
     p.add_argument('--function', required=True,
                    choices=['quadratic', 'himmelblau', 'rosenbrock', 'double_well'],
-                   help='test function (from tests/)')
+                   help='test function (from functions/)')
     p.add_argument('--viz', default='photo',
                    choices=['photo', 'oned'],
                    help='visualizer implementation')

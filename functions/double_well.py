@@ -1,6 +1,6 @@
 import sympy as sp
 
-from algorithms._deriv import make_derivatives
+from ._deriv import make_derivatives
 from .protocol import BaseFunction
 
 x = sp.Symbol('x')
