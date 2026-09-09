@@ -27,22 +27,22 @@ DEFAULT_DIR='/storage/emulated/0/Download/mathcad-nf-sect'
 SAVE_DIR="$(grep -E '^VIZ_SAVE_DIR=' .env 2>/dev/null | head -n1 | cut -d= -f2- || true)"
 SAVE_DIR="${SAVE_DIR:-$DEFAULT_DIR}"
 
-echo "==> [1/4] Himmelblau (modified), 4 fixed starts, photos -> $SAVE_DIR"
+echo "==> [1/4] Himmelblau, 4 fixed starts, photos -> $SAVE_DIR"
 for pt in "0,0" "-1,-2" "-1,2" "0.5,-0.5"; do
     sub="himmelblau_$(echo "$pt" | tr ',-' '__')"
     python main.py --function himmelblau \
         --start="$pt" --viz photo >/dev/null
     # main.py saves all single starts under one name; keep each run's photo
     mkdir -p "$SAVE_DIR/$sub"
-    mv -f "$SAVE_DIR/himmelblau_modified_single.png" "$SAVE_DIR/$sub/"
+    mv -f "$SAVE_DIR/himmelblau_single.png" "$SAVE_DIR/$sub/"
 done
 
-echo "==> [2/4] Rosenbrock (modified), 4 random starts (seed $SEED_ROS)"
+echo "==> [2/4] Rosenbrock, 4 random starts (seed $SEED_ROS)"
 python main.py --function rosenbrock \
     --random --points 4 --seed "$SEED_ROS" \
     --viz photo >/dev/null
 
-echo "==> [3/4] Quadratic (modified), 2 random starts (seed $SEED_QUAD)"
+echo "==> [3/4] Quadratic, 2 random starts (seed $SEED_QUAD)"
 python main.py --function quadratic \
     --random --points 2 --seed "$SEED_QUAD" \
     --viz photo >/dev/null

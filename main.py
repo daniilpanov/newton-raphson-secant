@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from dotenv import load_dotenv
 
-from algorithms import get_method_class
+from algorithms import nf
 from tests import get_function
 from visualizer import get_visualizer
 
@@ -183,8 +183,6 @@ def main():
     check_args(args)
 
     func = get_function(args.function)
-    method_cls = get_method_class(args.method)
-    method = method_cls()
 
     if args.trace:
         if args.random:
@@ -198,7 +196,7 @@ def main():
                 print(f"\n{'#' * 78}\n### Старт #{i + 1}/{len(starts)}: "
                       f"{_fmt_vec(x0)}\n{'#' * 78}", flush=True)
             trace = []
-            method.nf(func.f, func.grad, func.hess, x0,
+            nf(func.f, func.grad, func.hess, x0,
                       m=1000 if func.name == 'rosenbrock' else 500, trace=trace)
             print(format_trace(trace, func.name))
         return
@@ -218,7 +216,7 @@ def main():
     print(f"\nFunction: {func.name} ({func.dim}D) | "
           f"{'random (%d points)' % args.points if args.random else 'single start'}")
     for i, x0 in enumerate(starts):
-        X = method.nf(func.f, func.grad, func.hess, x0, m=1000 if func.name == 'rosenbrock' else 500)
+        X = nf(func.f, func.grad, func.hess, x0, m=1000 if func.name == 'rosenbrock' else 500)
         trajectories.append(X)
         xf = X[-1]
         x0f = np.asarray(x0, float).ravel()
