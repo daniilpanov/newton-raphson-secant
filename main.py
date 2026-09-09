@@ -39,7 +39,7 @@ def build_parser():
                    choices=['quadratic', 'himmelblau', 'rosenbrock', 'double_well'],
                    help='test function (from tests/)')
     p.add_argument('--viz', default='photo',
-                   choices=['photo', 'interactive', 'oned'],
+                   choices=['photo', 'oned'],
                    help='visualizer implementation')
     p.add_argument('--save-dir', default=None,
                    help='photo save dir; default from .env (VIZ_SAVE_DIR)')
