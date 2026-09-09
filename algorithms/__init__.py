@@ -1,9 +1,7 @@
 from .modified import ModifiedNewton
 from .protocol import Optimizer
-from .simple import SimpleNewton
 
 METHODS = {
-    'simple': SimpleNewton,
     'modified': ModifiedNewton,
 }
 
@@ -14,4 +12,4 @@ def get_method_class(name: str) -> type:
     return METHODS[name]
 
 
-__all__ = ['Optimizer', 'SimpleNewton', 'ModifiedNewton', 'METHODS', 'get_method_class']
+__all__ = ['Optimizer', 'ModifiedNewton', 'METHODS', 'get_method_class']

@@ -39,7 +39,7 @@ def build_parser():
                    choices=['quadratic', 'himmelblau', 'rosenbrock', 'double_well'],
                    help='test function (from tests/)')
     p.add_argument('--method', default='modified',
-                   choices=['simple', 'modified'],
+                   choices=['modified'],
                    help='optimization implementation')
     p.add_argument('--viz', default='photo',
                    choices=['photo', 'interactive', 'oned'],
