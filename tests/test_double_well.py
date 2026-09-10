@@ -2,6 +2,7 @@ import numpy as np
 
 from algorithms import nf
 from functions import get_function
+from logger import make_logger
 
 FUNCTION = get_function('double_well')
 STARTS = [np.asarray([x], float) for x in [-2.0, -0.5, 1.0, 3.0]]
@@ -14,12 +15,20 @@ def _stationary_points():
     return [np.asarray([-1.5]), np.asarray([(3 - s5) / 4]), np.asarray([(3 + s5) / 4])]
 
 
-def _run_starts(save, label):
+def _run_starts(save, label, log):
     trajectories = []
 
     for x0 in STARTS:
-        X = nf(FUNCTION.f, FUNCTION.grad, FUNCTION.hess, x0, m=MAX_ITERS)
-
+        name = f'{FUNCTION.name}_{label(x0)}'
+        with log(name) as logger:
+            X = nf(
+                FUNCTION.f,
+                FUNCTION.grad,
+                FUNCTION.hess,
+                x0,
+                m=MAX_ITERS,
+                logger=logger,
+            )
         xf = X[-1]
         iters = len(X) - 1
         grad_norm = float(np.linalg.norm(FUNCTION.grad(xf)))
@@ -32,14 +41,13 @@ def _run_starts(save, label):
         save(
             FUNCTION,
             [X],
-            f'{FUNCTION.name}_{label(x0)}',
+            name,
             title=f'{FUNCTION.name} from ({", ".join(f"{v:.1f}" for v in x0)})',
         )
-
         trajectories.append(X)
 
     return trajectories
 
 
-def test_double_well_converges(save_photo, label):
-    _run_starts(save_photo, label)
+def test_double_well_converges(save_photo, label, log):
+    _run_starts(save_photo, label, log)

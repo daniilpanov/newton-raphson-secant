@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 from algorithms import nf
 from functions import get_function
+from logger import DEFAULT_LOG_FILE, make_logger, log_enabled
 from visualizer import get_visualizer
 
 DEFAULT_SAVE_DIR = Path('/storage/emulated/0/Download/mathcad-nf-sect')
@@ -51,8 +52,6 @@ def build_parser():
                    help='number of random points (with --random)')
     p.add_argument('--seed', type=int, default=None,
                    help='random seed for reproducible runs')
-    p.add_argument('--trace', action='store_true',
-                   help='print step-by-step trace for each start')
     return p
 
 
@@ -88,117 +87,28 @@ def closest_minimum(xf, minima):
     return idx, minima[idx], dists[idx]
 
 
-def _fmt(v):
-    if v is None:
-        return '—'
-    v = float(v)
-    if v == 0:
-        return '0'
-    a = abs(v)
-    if a < 1e-4 or a >= 1e5:
-        return f'{v:.3e}'
-    return f'{v:.6f}'
-
-
-def _fmt_vec(v):
-    return '(' + ', '.join(_fmt(c) for c in np.asarray(v, float).ravel()) + ')'
-
-
-def _fmt_mat(m):
-    rows = ['[' + ', '.join(_fmt(c) for c in np.asarray(r, float)) + ']'
-            for r in np.asarray(m, float)]
-    return '[' + ', '.join(rows) + ']'
-
-
-def format_trace(trace, func_name):
-    lines = []
-    for rec in trace:
-        kind = rec['kind']
-        if kind == 'start':
-            lines.append('=' * 78)
-            lines.append(f"Функция: {func_name}")
-            lines.append(f"x0 = {_fmt_vec(rec['x'])}  |  eps1 = {_fmt(rec['eps1'])}  |  "
-                         f"eps2 = {_fmt(rec['eps2'])}  |  m = {rec['m']}")
-            lines.append('=' * 78)
-        elif kind == 'iter':
-            lines.append('')
-            lines.append(f"k={rec['k']}  x({rec['k']}) = {_fmt_vec(rec['x'])}  "
-                         f"f = {_fmt(rec['f'])}  |grad| = {_fmt(rec['g_norm'])}")
-            lines.append(f"   grad = {_fmt_vec(rec['g'])}")
-        elif kind == 'hess':
-            ok = 'ДА' if rec['pd_ok'] else 'НЕТ'
-            lines.append(f"   H = {_fmt_mat(rec['H'])}")
-            lines.append(f"   det(H) = {_fmt(rec['det'])}  |  H00 = {_fmt(rec['h00'])}  |  "
-                         f"условие PD (H00>0 ∧ |det|>1e-12): {ok}")
-        elif kind == 'direction':
-            origin = ('Ньютон (d = -H⁻¹·g)' if rec['origin'] == 'newton'
-                      else 'градиентный спуск (fallback d = -g)')
-            lines.append(f"   → d = {_fmt_vec(rec['d'])}  |d| = {_fmt(rec['d_norm'])}  "
-                         f"d·g = {_fmt(rec['d_dot_g'])}")
-            lines.append(f"   выбор: {origin}  —  {rec['reason']}")
-        elif kind == 'bracket_start':
-            lines.append(f"   брекет: b = 1 → φ(b) = {_fmt(rec['phi_b'])}")
-        elif kind == 'bracket':
-            lines.append(f"           b = {_fmt(rec['b'])} → φ(b) = {_fmt(rec['phi_b'])} "
-                         f"(φ(b) < 0 → b ← 2·b)")
-        elif kind == 'sect':
-            lines.append(f"   SECT: a = {_fmt(rec['a'])}  b = {_fmt(rec['b'])}  "
-                         f"t = {_fmt(rec['t'])}  φ(a) = {_fmt(rec['phi_a'])}  "
-                         f"φ(b) = {_fmt(rec['phi_b'])}")
-        elif kind == 'sect_denzero':
-            lines.append('   SECT: знаменатель φ(b)-φ(a) = 0 → стоп')
-        elif kind == 'sect_final':
-            lines.append(f"   → t* = {_fmt(rec['t'])}   (φ(t*) = {_fmt(rec['phi_t'])})")
-        elif kind == 'backtrack':
-            for p, fv in rec['probes']:
-                rel = '≥' if fv >= rec['f_x'] else '<'
-                lines.append(f"   backtracking: t = {_fmt(p)} → f(x + t·d) = {_fmt(fv)} {rel} "
-                             f"f(x) = {_fmt(rec['f_x'])} → t ← t/2")
-            lines.append(f"   шаг t = {_fmt(rec['t'])}: f(x+t·d) = {_fmt(rec['f_t'])} ≤ "
-                         f"f(x) = {_fmt(rec['f_x'])} → шаг принят")
-        elif kind == 'step':
-            lines.append(f"   t = {_fmt(rec['t'])}  →  Δx = {_fmt_vec(rec['step'])}")
-        elif kind == 'update':
-            lines.append(f"   x({rec['k']}+1) = {_fmt_vec(rec['x'])}  f = {_fmt(rec['f'])}  "
-                         f"|grad| = {_fmt(rec['g_norm'])}")
-        elif kind == 'linerr':
-            lines.append('   ПРЕРВАНО: LinAlgError при решении H·d = -g')
-        elif kind == 'nan':
-            lines.append('   ПРЕРВАНО: NaN/Inf в x')
-        elif kind == 'stop':
-            lines.append('')
-            if rec['reason'] == 'converged':
-                lines.append(f"СТОП: |grad| = {_fmt(rec['g_norm'])} ≤ eps1 → СХОДИМОСТЬ к "
-                             f"{_fmt_vec(rec['x'])};  итераций: {rec['k']}")
-            elif rec['reason'] == 'm_limit':
-                lines.append(f"СТОП: достигнут лимит m = {rec['m']} (итераций: {rec['k']})")
-            else:
-                lines.append(f"СТОП: аварийно (итераций: {rec['k']})")
-    return '\n'.join(lines)
-
-
 def main():
     load_dotenv()
     args = build_parser().parse_args()
     check_args(args)
 
     func = get_function(args.function)
+    m = 1000 if func.name == 'rosenbrock' else 500
+    if args.random:
+        rng = np.random.default_rng(args.seed)
+        starts = rng.uniform(func.lo, func.hi, size=(args.points, func.dim))
+    else:
+        starts = [np.asarray(args.start, float)]
+    multi = len(starts) > 1
 
-    if args.trace:
-        if args.random:
-            rng = np.random.default_rng(args.seed)
-            starts = rng.uniform(func.lo, func.hi, size=(args.points, func.dim))
-        else:
-            starts = [np.asarray(args.start, float)]
-        multi = len(starts) > 1
+    if log_enabled():
+        mode = (os.getenv('LOG_MODE') or 'no').strip().lower()
+        if mode in ('file', 'both'):
+            Path(os.getenv('LOG_FILE') or DEFAULT_LOG_FILE).unlink(missing_ok=True)
         for i, x0 in enumerate(starts):
-            if multi:
-                print(f"\n{'#' * 78}\n### Старт #{i + 1}/{len(starts)}: "
-                      f"{_fmt_vec(x0)}\n{'#' * 78}", flush=True)
-            trace = []
-            nf(func.f, func.grad, func.hess, x0,
-                      m=1000 if func.name == 'rosenbrock' else 500, trace=trace)
-            print(format_trace(trace, func.name))
+            name = f'{func.name} #{i + 1}' if multi else func.name
+            with make_logger(name) as logger:
+                nf(func.f, func.grad, func.hess, x0, m=m, logger=logger)
         return
 
     save_dir = args.save_dir or os.getenv('VIZ_SAVE_DIR') or str(DEFAULT_SAVE_DIR)
@@ -206,17 +116,12 @@ def main():
         args.viz = 'oned'
     visualizer = get_visualizer(args.viz, save_dir=save_dir)
 
-    if args.random:
-        rng = np.random.default_rng(args.seed)
-        starts = rng.uniform(func.lo, func.hi, size=(args.points, func.dim))
-    else:
-        starts = [np.asarray(args.start, float)]
-
     trajectories = []
     print(f"\nFunction: {func.name} ({func.dim}D) | "
           f"{'random (%d points)' % args.points if args.random else 'single start'}")
     for i, x0 in enumerate(starts):
-        X = nf(func.f, func.grad, func.hess, x0, m=1000 if func.name == 'rosenbrock' else 500)
+        with make_logger(func.name) as logger:
+            X = nf(func.f, func.grad, func.hess, x0, m=m, logger=logger)
         trajectories.append(X)
         xf = X[-1]
         x0f = np.asarray(x0, float).ravel()
@@ -234,7 +139,7 @@ def main():
     visualizer.view(func, trajectories,
                     title=f"{func.name} - "
                           f"{'%d random starts' % args.points if args.random else 'one start'}",
-                    filename=filename)
+                filename=filename)
     print(f"\nDone. Files saved to {save_dir}")
 
 

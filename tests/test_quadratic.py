@@ -2,17 +2,26 @@ import numpy as np
 
 from algorithms import nf
 from functions import get_function
+from logger import make_logger
 
 FUNCTION = get_function('quadratic')
 STARTS = np.random.default_rng(7).uniform(FUNCTION.lo, FUNCTION.hi, size=(2, FUNCTION.dim))
 TOL = 1e-6
 
 
-def _run_starts(save, label):
+def _run_starts(save, label, log):
     trajectories = []
 
     for x0 in STARTS:
-        X = nf(FUNCTION.f, FUNCTION.grad, FUNCTION.hess, np.asarray(x0, float))
+        name = f'{FUNCTION.name}_{label(x0)}'
+        with log(name) as logger:
+            X = nf(
+                FUNCTION.f,
+                FUNCTION.grad,
+                FUNCTION.hess,
+                np.asarray(x0, float),
+                logger=logger,
+            )
         xf = X[-1]
         iters = len(X) - 1
 
@@ -27,7 +36,7 @@ def _run_starts(save, label):
         save(
             FUNCTION,
             [X],
-            f'{FUNCTION.name}_{label(x0)}',
+            name,
             title=f'{FUNCTION.name} from ({", ".join(f"{v:.1f}" for v in x0)})',
         )
 
@@ -36,5 +45,5 @@ def _run_starts(save, label):
     return trajectories
 
 
-def test_quadratic_converges_in_one_step(save_photo, label):
-    _run_starts(save_photo, label)
+def test_quadratic_converges_in_one_step(save_photo, label, log):
+    _run_starts(save_photo, label, log)
