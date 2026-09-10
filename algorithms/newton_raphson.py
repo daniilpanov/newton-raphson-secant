@@ -3,7 +3,7 @@ import numpy as np
 from .secant import sect
 
 
-def nf(f, grad, hess, x0, eps1=1e-6, eps2=1e-6, m=500, det_tol=1e-12,
+def nf(f, grad, hess, x0, eps1=1e-6, eps2=1e-6, m=500,
        d_max=1e6, b_max=100.0, *, logger):
     x = np.asarray(x0, float).copy()
     traj = [x.copy()]
@@ -15,10 +15,11 @@ def nf(f, grad, hess, x0, eps1=1e-6, eps2=1e-6, m=500, det_tol=1e-12,
         f_x = f(x)
         logger.log('iter', {'k': k, 'x': x, 'f': f_x, 'g': g, 'g_norm': g_norm})
         H = hess(x)
-        detH = float(np.linalg.det(H))
-        pd_ok = H[0, 0] > 0 and detH > det_tol
-        logger.log('hess', {'k': k, 'H': H, 'det': detH,
-                            'h00': float(H[0, 0]), 'pd_ok': pd_ok})
+        evals, evecs = np.linalg.eigh(H)
+        lam_min = float(evals[0])
+        pd_ok = lam_min > 0
+        logger.log('hess', {'k': k, 'H': H, 'eigenvalues': list(map(float, evals)),
+                            'lam_min': lam_min, 'pd_ok': pd_ok})
         d = None
         if pd_ok:
             try:
@@ -27,18 +28,29 @@ def nf(f, grad, hess, x0, eps1=1e-6, eps2=1e-6, m=500, det_tol=1e-12,
                 d = None
         use_newton = (d is not None and np.all(np.isfinite(d))
                       and np.linalg.norm(d) <= d_max and d @ g < 0)
-        d_final = d if use_newton else -g
         if use_newton:
-            reason = 'PD выполнен, d·g < 0 и |d| ≤ 1e6 → ньютоновский шаг'
+            d_final = d
+            origin = 'newton'
+            reason = 'PD (λmin>0), d·g<0 и |d|≤1e6 → ньютоновский шаг'
         elif pd_ok:
-            reason = 'PD выполнен, но проверки не прошли (|d| ≤ 1e6, d·g < 0) → сброс на -g'
+            d_final = -g
+            origin = 'fallback(-g)'
+            reason = ('PD (λmin>0), но проверки не прошли (|d|≤1e6, d·g<0)'
+                      ' → сброс на -g')
         else:
-            reason = 'H00 ≤ 0 или |det| ≤ 1e-12 → ньютоновский шаг не строится'
+            v = evecs[:, 0]
+            if float(g @ v) > 0:
+                v = -v
+            d_final = v
+            origin = 'negative curvature'
+            reason = ('λmin≤0 → гессиан не PD; направление отрицательной '
+                      'кривизны (собственный вектор λmin), ориентировано g·v≤0,'
+                      ' чтобы уйти от седла')
+        d_final = np.asarray(d_final, float).ravel()
         logger.log('direction', {'k': k, 'd': d_final,
                                  'd_norm': float(np.linalg.norm(d_final)),
                                  'd_dot_g': float(d_final @ g),
-                                 'origin': 'newton' if use_newton else 'fallback(-g)',
-                                 'reason': reason})
+                                 'origin': origin, 'reason': reason})
         dphi = lambda t_val: float(grad(x + t_val * d_final) @ d_final)
         a, b = 0.0, 1.0
         phi_b = dphi(b)
