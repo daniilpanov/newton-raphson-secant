@@ -53,28 +53,46 @@ def nf(f, grad, hess, x0, eps1=1e-6, eps2=1e-6, m=500,
                                  'origin': origin, 'reason': reason})
         dphi = lambda t_val: float(grad(x + t_val * d_final) @ d_final)
         a, b = 0.0, 1.0
-        phi_b = dphi(b)
-        logger.log('bracket_start', {'k': k, 'b': b, 'phi_b': phi_b})
-        while phi_b < 0 and b < b_max:
+        t_star = None
+        guard = 0
+        logger.log('bracket_start', {'k': k, 'b': b, 'phi_b': dphi(b)})
+        while b < b_max and guard < 20:
+            guard += 1
+            while dphi(b) < 0 and b < b_max:
+                b *= 2.0
+                logger.log('bracket', {'k': k, 'b': b, 'phi_b': dphi(b)})
+            if dphi(a) * dphi(b) <= 0.0:
+                t = sect(dphi, a, b, eps2, logger=logger)
+                curv = float(d_final @ hess(x + t * d_final) @ d_final)
+                logger.log('curv', {'k': k, 't': t, 'curv': curv,
+                                    'accepted': curv > 0})
+                if curv > 0:      # a MINIMUM along d, not a max/saddle
+                    t_star = t
+                    break
+            a = b
             b *= 2.0
-            phi_b = dphi(b)
-            logger.log('bracket', {'k': k, 'b': b, 'phi_b': phi_b})
-        t = sect(dphi, a, b, eps2, logger=logger)
-        phi_t = dphi(t)
-        logger.log('sect_final', {'k': k, 't': t, 'phi_t': phi_t})
-        f_t = f(x + t * d_final)
+        if t_star is None:
+            t = 1.0
+            while f(x + t * d_final) >= f_x and t > eps2:
+                t /= 2.0
+            t_star = t if f(x + t * d_final) < f_x else 0.0
+            logger.log('curv_fallback', {'k': k, 't': t_star,
+                                         'f_x': f_x,
+                                         'f_t': float(f(x + t_star * d_final))})
+        logger.log('sect_final', {'k': k, 't': t_star, 'phi_t': dphi(t_star)})
         probes = []
-        while f_t >= f_x and t > eps2:
-            t /= 2.0
-            f_t = f(x + t * d_final)
-            probes.append((float(t), float(f_t)))
-        logger.log('backtrack', {'k': k, 't': t, 'f_x': f_x,
-                                 'f_t': f_t, 'probes': probes})
-        x = x + t * d_final
+        while f(x + t_star * d_final) >= f_x and t_star > eps2:
+            t_star /= 2.0
+            probes.append((float(t_star), float(f(x + t_star * d_final))))
+        logger.log('backtrack', {'k': k, 't': t_star, 'f_x': f_x,
+                                 'f_t': float(f(x + t_star * d_final)),
+                                 'probes': probes})
+        x = x + t_star * d_final
         traj.append(x.copy())
         g = np.asarray(grad(x), float)
         g_norm = float(np.linalg.norm(g))
-        logger.log('update', {'k': k, 'x': x, 'f': f_t, 'g_norm': g_norm})
+        logger.log('update', {'k': k, 'x': x, 'f': float(f(x)),
+                              'g_norm': g_norm})
         k += 1
     conv = g_norm <= eps1
     logger.log('stop', {'reason': 'converged' if conv else 'm_limit',
