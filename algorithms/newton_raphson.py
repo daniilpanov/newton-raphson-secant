@@ -9,17 +9,20 @@ def nf(f, grad, hess, x0, eps1=1e-6, eps2=1e-6, m=500,
     traj = [x.copy()]
     k = 0
     logger.log('start', {'x': x, 'eps1': eps1, 'eps2': eps2, 'm': m})
-    g = np.asarray(grad(x), float)
-    g_norm = float(np.linalg.norm(g))
-    while g_norm > eps1 and k < m:
-        f_x = f(x)
-        logger.log('iter', {'k': k, 'x': x, 'f': f_x, 'g': g, 'g_norm': g_norm})
-        H = hess(x)
+    while k < m:
+        g = np.asarray(grad(x), float)
+        H = np.asarray(hess(x), float)
         evals, evecs = np.linalg.eigh(H)
         lam_min = float(evals[0])
+        g_norm = float(np.linalg.norm(g))
         pd_ok = lam_min > 0
+        f_x = float(f(x))
+        logger.log('iter', {'k': k, 'x': x, 'f': f_x, 'g': g, 'g_norm': g_norm})
         logger.log('hess', {'k': k, 'H': H, 'eigenvalues': list(map(float, evals)),
                             'lam_min': lam_min, 'pd_ok': pd_ok})
+        # stop only at a local minimum, not at a saddle/maximum
+        if g_norm <= eps1 and pd_ok:
+            break
         d = None
         if pd_ok:
             try:
@@ -94,7 +97,11 @@ def nf(f, grad, hess, x0, eps1=1e-6, eps2=1e-6, m=500,
         logger.log('update', {'k': k, 'x': x, 'f': float(f(x)),
                               'g_norm': g_norm})
         k += 1
-    conv = g_norm <= eps1
+    g_final = np.asarray(grad(x), float)
+    lam_final = float(np.linalg.eigvalsh(hess(x))[0])
+    conv = float(np.linalg.norm(g_final)) <= eps1 and lam_final > 0
     logger.log('stop', {'reason': 'converged' if conv else 'm_limit',
-                        'k': k, 'x': x, 'g_norm': g_norm, 'm': m})
+                        'k': k, 'x': x,
+                        'g_norm': float(np.linalg.norm(g_final)),
+                        'lam_min': lam_final})
     return np.asarray(traj)
