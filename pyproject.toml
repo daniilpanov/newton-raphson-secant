@@ -1,0 +1,20 @@
+[project]
+name = "newton-raphson-secant"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "matplotlib>=3.11.1",
+    "numpy>=2.4.4",
+    "pytest>=9.1.1",
+    "python-dotenv>=1.2.3",
+    "sympy>=1.14.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
