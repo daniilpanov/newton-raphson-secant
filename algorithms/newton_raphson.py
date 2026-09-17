@@ -61,6 +61,7 @@ def nf(f, grad, hess, x0, eps1=1e-6, eps2=1e-6, m=500,
         logger.log('bracket_start', {'k': k, 'b': b, 'phi_b': dphi(b)})
         while b < b_max and guard < 20:
             guard += 1
+            logger.log('guard', {'k': k, 'guard': guard, 'a': a, 'b': b})
             while dphi(b) < 0 and b < b_max:
                 b *= 2.0
                 logger.log('bracket', {'k': k, 'b': b, 'phi_b': dphi(b)})

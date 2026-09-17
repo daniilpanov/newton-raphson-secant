@@ -9,9 +9,9 @@ import numpy as np
 DEFAULT_LOG_FILE = 'log.ndjson'
 
 LogKind = Literal[
-    'start', 'iter', 'hess', 'direction', 'bracket_start', 'bracket',
-    'sect', 'sect_denzero', 'sect_final', 'curv', 'curv_fallback',
-    'backtrack', 'update', 'stop',
+    'start', 'iter', 'hess', 'direction', 'bracket_start', 'guard',
+    'bracket', 'sect', 'sect_denzero', 'sect_final', 'curv',
+    'curv_fallback', 'backtrack', 'update', 'stop',
 ]
 
 
