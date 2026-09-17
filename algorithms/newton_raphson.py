@@ -57,24 +57,17 @@ def nf(f, grad, hess, x0, eps1=1e-6, eps2=1e-6, m=500,
         dphi = lambda t_val: float(grad(x + t_val * d_final) @ d_final)
         a, b = 0.0, 1.0
         t_star = None
-        guard = 0
         logger.log('bracket_start', {'k': k, 'b': b, 'phi_b': dphi(b)})
-        while b < b_max and guard < 20:
-            guard += 1
-            logger.log('guard', {'k': k, 'guard': guard, 'a': a, 'b': b})
-            while dphi(b) < 0 and b < b_max:
-                b *= 2.0
-                logger.log('bracket', {'k': k, 'b': b, 'phi_b': dphi(b)})
-            if dphi(a) * dphi(b) <= 0.0:
-                t = sect(dphi, a, b, eps2, logger=logger)
-                curv = float(d_final @ hess(x + t * d_final) @ d_final)
-                logger.log('curv', {'k': k, 't': t, 'curv': curv,
-                                    'accepted': curv > 0})
-                if curv > 0:      # a MINIMUM along d, not a max/saddle
-                    t_star = t
-                    break
-            a = b
+        while dphi(b) < 0 and b < b_max:
             b *= 2.0
+            logger.log('bracket', {'k': k, 'b': b, 'phi_b': dphi(b)})
+        if dphi(a) * dphi(b) <= 0.0:
+            t = sect(dphi, a, b, eps2, logger=logger)
+            curv = float(d_final @ hess(x + t * d_final) @ d_final)
+            logger.log('curv', {'k': k, 't': t, 'curv': curv,
+                                'accepted': curv > 0})
+            if curv > 0:      # a MINIMUM along d, not a max/saddle
+                t_star = t
         if t_star is None:
             t = 1.0
             while f(x + t * d_final) >= f_x and t > eps2:
